@@ -1,6 +1,6 @@
 {
- "name": "원팬 냉장고",
- "short_name": "원팬 냉장고",
+ "name": "냉장고를 맡겨줘",
+ "short_name": "냉장고를 맡겨줘",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
