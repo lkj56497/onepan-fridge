@@ -55,6 +55,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .chip[aria-pressed="true"]{background:var(--yolk);color:var(--yolk-ink);font-weight:600}
 .chip .n{font-size:11px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
 .empty{color:var(--muted);font-size:14px}
+[hidden]{display:none!important}.mq{margin:0 0 10px}.mqinfo{margin:-2px 0 10px;font-size:13px;color:var(--muted,#6b7570)}
 .kinds{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin:-4px 0 12px;scrollbar-width:none}
 .kinds::-webkit-scrollbar{display:none}
 .kind{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:13px;line-height:1.3}
@@ -153,6 +154,8 @@ header{display:block}
 
   <section id="results" aria-labelledby="rh">
     <div class="sechead"><h2 id="rh"></h2><span class="hint" id="water"></span></div>
+    <input type="search" id="mq" class="mq" placeholder="메뉴 검색 (예: 김치찌개, 파스타)" aria-label="메뉴 검색" enterkeyhint="search">
+    <p class="mqinfo" id="mqinfo" hidden></p>
     <div class="seg" role="tablist" id="seg">
       <button role="tab" data-f="0" aria-selected="true"><span id="t0"></span><span class="c" id="c0"></span></button>
       <button role="tab" data-f="2"><span id="t2"></span><span class="c" id="c2"></span></button>
@@ -253,8 +256,20 @@ function renderChips(){
   selText();
 }
 function score(r){const miss=r.req.filter(k=>!sel.has(k));return {miss,have:r.req.length-miss.length,tot:r.req.length}}
+let mq="";
+const norm=s=>s.replace(/\s+/g,"").toLowerCase();
 function renderList(){
   const s0=R.map((r,i)=>({r,i,...score(r)}));
+  const searching=!!mq;
+  $("seg").hidden=searching;$("kinds").hidden=searching;$("mqinfo").hidden=!searching;
+  if(searching){
+    const qn=norm(mq);
+    const rows=s0.filter(x=>norm(x.r.t).includes(qn));
+    rows.sort((a,b)=>(norm(a.r.t).startsWith(qn)?0:1)-(norm(b.r.t).startsWith(qn)?0:1)||a.miss.length-b.miss.length);
+    $("mqinfo").textContent=rows.length?`‘${mq}’ 메뉴 ${rows.length}개 · 전체 레시피에서 찾았어요`:"";
+    $("list").innerHTML=rows.length?rows.map(cardH).join(""):`<p class="empty">‘${esc(mq)}’ 이름이 들어간 메뉴가 없어요. 다른 이름으로 찾아보세요.</p>`;
+    return;
+  }
   const inTab=x=>filter==="0"?!x.miss.length:filter==="2"?(x.miss.length&&x.miss.length<=2):filter==="fav"?isFav(x.r):true;
   $("kinds").innerHTML=KINDS.map(k=>{const n=s0.filter(x=>inTab(x)&&(k==="전체"||x.r.k===k)).length;return `<button type="button" class="kind" data-k="${k}" aria-pressed="${kind===k}">${k}<span class="n">${n}</span></button>`}).join("");
   const s=kind==="전체"?s0:s0.filter(x=>x.r.k===kind);
@@ -263,14 +278,16 @@ function renderList(){
   let rows=filter==="0"?s.filter(x=>!x.miss.length):filter==="2"?s.filter(x=>x.miss.length&&x.miss.length<=2):filter==="fav"?s.filter(x=>isFav(x.r)):s;
   rows.sort((a,b)=>a.miss.length-b.miss.length||b.have/b.tot-a.have/a.tot);
   if(!rows.length){$("list").innerHTML=`<p class="empty">${esc(filter==="0"&&kind==="전체"?t("empty0"):filter==="fav"&&kind==="전체"?t("favempty"):kind!=="전체"?`이 조건에 맞는 ${kind} 레시피가 없어요. 다른 탭이나 종류를 골라보세요.`:t("empty"))}</p>`;return}
-  $("list").innerHTML=rows.map(x=>{
+  $("list").innerHTML=rows.map(cardH).join("");
+}
+function cardH(x){{
     const r=loc(x.r);
     const p=Math.round(x.have/x.tot*100);
     const col=x.miss.length?"var(--yolk)":"var(--leaf)";
     const fv=isFav(x.r);
     return `<div class="cw"><button type="button" class="card" data-i="${x.i}"><div class="ring" style="--p:${p};--ringc:${col}"><span>${x.have}/${x.tot}</span></div>
     <div style="min-width:0"><div class="t">${esc(r.t)}</div><div class="meta"><span class="kt">${esc(x.r.k)}</span> ${esc(r.s)} · ${t("mins",{m:x.r.total})} · ${x.miss.length?`<span>${t("miss",{k:x.miss.length})}</span>`:`<span class="ok">${t("have")}</span>`}</div>
-    ${x.miss.length?`<div class="miss">${x.miss.map(m=>`<span>${esc(NM(m))}</span>`).join("")}</div>`:""}</div></button><button type="button" class="star" data-fav="${x.i}" aria-pressed="${fv}" aria-label="${esc(fv?t("favdel"):t("favadd"))}: ${esc(r.t)}">${fv?"★":"☆"}</button></div>`}).join("");
+    ${x.miss.length?`<div class="miss">${x.miss.map(m=>`<span>${esc(NM(m))}</span>`).join("")}</div>`:""}</div></button><button type="button" class="star" data-fav="${x.i}" aria-pressed="${fv}" aria-label="${esc(fv?t("favdel"):t("favadd"))}: ${esc(r.t)}">${fv?"★":"☆"}</button></div>`}
 }
 function fillSheet(i){
   const base=R[i], r=loc(base); const {miss}=score(base);
@@ -303,6 +320,7 @@ $("groups").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b
   sel.has(k)?sel.delete(k):sel.add(k);b.setAttribute("aria-pressed",sel.has(k));save();updateHeads();selText();renderList()});
 $("groups").addEventListener("toggle",e=>{const d=e.target;if(!d.dataset||!d.dataset.g||q)return;d.open?openG.add(d.dataset.g):openG.delete(d.dataset.g)},true);
 $("q").addEventListener("input",e=>{q=e.target.value.trim();renderChips()});
+$("mq").addEventListener("input",e=>{mq=e.target.value.trim();renderList()});
 $("clear").onclick=()=>{sel=new Set();save();renderChips();renderList()};
 $("basic").onclick=()=>{sel=new Set(BASIC);save();renderChips();renderList()};
 $("kinds").addEventListener("click",e=>{const b=e.target.closest(".kind");if(!b)return;kind=b.dataset.k;try{localStorage.setItem("opf-kind",kind)}catch(e){}renderList()});
